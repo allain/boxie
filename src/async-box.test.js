@@ -58,8 +58,21 @@ describe('AsyncBox', () => {
   it('rejects when opening an empty async box', () =>
     expect(AsyncBox(null)()).rejects.toBeInstanceOf(Error))
 
-  it('map handler can fill empty box', () =>
+  it('rejects when containing a Rejecting promise', () =>
+    expect(
+      AsyncBox(Promise.reject(new Error('testing')))()
+    ).rejects.toBeInstanceOf(Error))
+
+  it('can be handled by passing value', () =>
+    expect(
+      AsyncBox(Promise.reject(new Error('testing')))('test')
+    ).resolves.toEqual('test'))
+
+  it('opener handler can fill empty box', () =>
     expect(AsyncBox(null).map(null, () => 'test')()).resolves.toEqual('test'))
+
+  it('map handler can fill empty box', () =>
+    expect(AsyncBox(null)(() => 'test')).resolves.toEqual('test'))
 
   it('does nothing fancy with function values', () =>
     expect(
@@ -101,4 +114,18 @@ describe('AsyncBox', () => {
 
   it('can handle Boxing a promise that resolves to an AsyncBox', () =>
     expect(AsyncBox(Promise.resolve(AsyncBox(1)))()).resolves.toEqual(1))
+  it('supports specifying a value to the opener', () =>
+    expect(AsyncBox(null)(5)).resolves.toEqual(5))
+
+  it('supports specifying a value to the empty handler', () =>
+    expect(AsyncBox(null).map(null, 5)()).resolves.toEqual(5))
+
+  it('supports specifying a value to the error handler', () =>
+    expect(
+      AsyncBox(1)
+        .map(x => {
+          throw new Error()
+        })
+        .map(null, 5)()
+    ).resolves.toEqual(5))
 })

@@ -54,11 +54,14 @@ describe('Box', () => {
   })
 
   it('throws exception when opening a box with an Error in it', () => {
-    expect(() =>
+    const ex = new Error('Expected')
+    try {
       Box(1).map(() => {
-        throw new Error('Expected')
+        throw ex
       })()
-    ).toThrowError('box contained error')
+    } catch (err) {
+      expect(err).toBe(ex)
+    }
   })
 
   it('ignores errors until the last possible moment', () =>
@@ -112,4 +115,32 @@ describe('Box', () => {
 
   it('supports filling box using opener', () =>
     expect(Box(null)(() => 'filled')).toEqual('filled'))
+
+  it('supports specifying a value to the empty opener', () =>
+    expect(Box(null)(5)).toEqual(5))
+
+  it('supports specifying a value to the error opener', () =>
+    expect(
+      Box(1).map(() => {
+        throw new Error()
+      })(5)
+    ).toEqual(5))
+
+  it('supports specifying a value to the empty handler', () =>
+    expect(Box(null).map(null, 5)()).toEqual(5))
+
+  it('supports specifying a value to the error handler', () =>
+    expect(
+      Box(1)
+        .map(x => {
+          throw new Error()
+        })
+        .map(null, 5)()
+    ).toEqual(5))
+
+  it('supports null as an opener alue', () =>
+    expect(Box(null)(null)).toBeNull())
+
+  it('has error box helper', () =>
+    expect(Box.isBox(Box.error(new Error('Testing')))).toBeTruthy())
 })
