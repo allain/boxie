@@ -2,7 +2,7 @@
 
 A tiny tool for synchronous and asynchronous functional programming.
 
-**Note:** None of the ideas used to make this tool are my own, I'm just trying to combine them in a way that has the smallest possible API.
+**Note:** None of the ideas used to make this tool are my own, I'm just trying to combine them in a way that has the smallest possible API. It's Maybe monads + some other niceties.
 
 ## Idea
 
