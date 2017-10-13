@@ -2,23 +2,32 @@ const emptyValue = x => x === null || typeof x === 'undefined'
 const isBox = x => typeof x.map === 'function' && !Array.isArray(x)
 
 const EMPTY_BOX = Object.assign(
-  () => {
+  filler => {
+    if (filler) return filler()
+
     throw new Error('cannot open empty box')
   },
   {
-    map: (_, empty) => (empty ? Box(empty()) : EMPTY_BOX)
+    map: (_, filler) => (filler ? tryBox(filler) : EMPTY_BOX)
   }
 )
 
 const ErrorBox = err => {
   const errorBox = Object.assign(
-    () => {
-      throw new Error('Unhandled error: ' + err)
+    handler => {
+      if (handler) {
+        const handled = handler(err)
+        return isBox(handled) ? handled() : handled
+      }
+
+      throw new Error('box contained error: ' + err)
     },
     {
       map: (_, handle) => (handle ? tryBox(() => handle(err)) : errorBox)
     }
   )
+
+  return errorBox
 }
 
 const tryBox = fn => {

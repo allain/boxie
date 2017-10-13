@@ -1,22 +1,21 @@
-const isAsyncBox = x => x && x._async && x.map && !Array.isArray(x)
+const isBox = x => x && x.map && !Array.isArray(x)
+const isAsyncBox = x => isBox(x) && x._async
 const emptyValue = x => x === null || typeof x === 'undefined'
 
 const AsyncBox = x => {
-  const resolver = Promise.resolve(x)
+  const value = Promise.resolve(isBox(x) ? x() : x)
 
   return Object.assign(
-    () =>
-      resolver.then(y => {
+    handler =>
+      value.then(y => {
         if (emptyValue(y)) throw new Error('cannot open empty box')
 
-        if (isAsyncBox(y)) return y()
-
-        return y
-      }),
+        return isBox(y) ? y() : y
+      }, handler),
     {
       map: (f, empty) =>
         AsyncBox(
-          resolver.then(
+          value.then(
             y =>
               emptyValue(y)
                 ? empty ? empty() : null

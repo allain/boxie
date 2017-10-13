@@ -8,6 +8,7 @@ describe('Box', () => {
 
   it('isBox works on all kinds of boxes', () => {
     expect(Box.isBox(Box(10))).toBeTruthy()
+    expect(Box.isBox(Box(Box(10)))).toBeTruthy()
     expect(Box.isBox(Box(null))).toBeTruthy()
     expect(Box.isBox(Box())).toBeTruthy()
     expect(Box.isBox(Box(Promise.resolve()))).toBeTruthy()
@@ -25,6 +26,9 @@ describe('Box', () => {
     expect(Box(undefined).map(x => x).map).toBeInstanceOf(Function)
     expect(Box(Promise.resolve(10)).map(x => x).map).toBeInstanceOf(Function)
   })
+
+  it('unboxes boxes when placed in a box', () =>
+    expect(Box(Box(Box(1)))()).toEqual(1))
 
   it('flattens maps when result is a box', () =>
     expect(Box(1).map(x => Box(x + 1))()).toEqual(2))
@@ -48,4 +52,64 @@ describe('Box', () => {
     expect(result).toBeInstanceOf(Promise)
     expect(result).resolves.toBeNull()
   })
+
+  it('throws exception when opening a box with an Error in it', () => {
+    expect(() =>
+      Box(1).map(() => {
+        throw new Error('Expected')
+      })()
+    ).toThrowError('box contained error')
+  })
+
+  it('ignores errors until the last possible moment', () =>
+    expect(
+      Box(1)
+        .map(x => {
+          throw new Error('expected')
+        })
+        .map(x => expect.fail('should not reach'))
+        .map(x => expect.fail('should not reach'))(_ => 'fixed')
+    ).toEqual('fixed'))
+
+  it('errors can be handled using handler on map', () => {
+    expect(
+      Box(1)
+        .map(() => {
+          throw new Error('Expected')
+        })
+        .map(null, err => err.message)()
+    ).toEqual('Expected')
+  })
+
+  it('if handler on map returns box it gets unboxed', () => {
+    expect(
+      Box(1)
+        .map(() => {
+          throw new Error('Expected')
+        })
+        .map(null, _ => Box('unboxed'))()
+    ).toEqual('unboxed')
+  })
+
+  it('errors can be andled using handler on opener', () => {
+    expect(
+      Box(1).map(() => {
+        throw new Error('Expected')
+      })(err => err.message)
+    ).toEqual('Expected')
+  })
+
+  it('if handler on opener returns box it unboxes it', () => {
+    expect(
+      Box(1).map(() => {
+        throw new Error('Expected')
+      })(_ => Box('unboxed'))
+    ).toEqual('unboxed')
+  })
+
+  it('supports filling box using filler', () =>
+    expect(Box(null).map(null, () => 'filled')()).toEqual('filled'))
+
+  it('supports filling box using opener', () =>
+    expect(Box(null)(() => 'filled')).toEqual('filled'))
 })
