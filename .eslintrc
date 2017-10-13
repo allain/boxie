@@ -1,0 +1,9 @@
+{
+  "extends": [
+	  "prettier-standard"
+  ],
+
+  "env": {
+    "jest": true 
+  }
+}

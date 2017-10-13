@@ -1,0 +1,38 @@
+{
+  "name": "boxie",
+  "version": "0.1.0",
+  "description": "A tool for writing functional code in real world JavaScript Apps.",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/allain/boxie.git"
+  },
+  "keywords": [
+    "Functional",
+    "synchronous",
+    "asynchronous"
+  ],
+  "author": "Allain Lalonde <allain.lalonde@gmail.com>",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/allain/boxie/issues"
+  },
+  "homepage": "https://github.com/allain/boxie#readme",
+  "devDependencies": {
+    "eslint": "^4.8.0",
+    "eslint-config-prettier": "^2.6.0",
+    "eslint-config-prettier-standard": "^1.0.1",
+    "eslint-config-standard": "^10.2.1",
+    "eslint-plugin-import": "^2.7.0",
+    "eslint-plugin-node": "^5.2.0",
+    "eslint-plugin-prettier": "^2.3.1",
+    "eslint-plugin-promise": "^3.5.0",
+    "eslint-plugin-standard": "^3.0.1",
+    "jest": "^21.2.1",
+    "prettier": "^1.7.4"
+  }
+}
