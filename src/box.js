@@ -5,7 +5,7 @@ const raise = err => {
 }
 
 const isPromise = x => x && isFunction(x.then) && isFunction(x.catch)
-const isBox = x => x && isFunction(x.map) && !Array.isArray(x)
+const isBox = x => isFunction(x) && isFunction(x.map)
 const isEmpty = x => x === null || typeof x === 'undefined'
 const isFunction = fn => typeof fn === 'function'
 const toFunction = fn => {
