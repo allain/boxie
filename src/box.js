@@ -1,54 +1,63 @@
-const emptyValue = x => x === null || typeof x === 'undefined'
-const isBox = x => typeof x.map === 'function' && !Array.isArray(x)
-const isFunction = f => typeof f === 'function'
-const handle = (handler, val) => (isFunction(handler) ? handler(val) : handler)
-const unbox = val => (isBox(val) ? val() : val)
+const Sync = require('./sync-then.js')
 
-const Box = x =>
-  emptyValue(x)
-    ? EMPTY_BOX
-    : isBox(x)
-      ? x
-      : Object.assign(() => x, {
-          map: f => tryBox(() => f(x))
-        })
-
-Box.isBox = isBox
-Box.error = err => ErrorBox(err)
-
-const tryBox = val => {
-  try {
-    return Box(handle(val))
-  } catch (err) {
-    return ErrorBox(err)
-  }
+const raise = err => {
+  throw err
 }
 
-const EMPTY_BOX = Object.assign(
-  (...args) => {
-    if (args.length) return handle(args[0])
+const isPromise = x => x && isFunction(x.then) && isFunction(x.catch)
+const isBox = x => x && isFunction(x.map) && !Array.isArray(x)
+const isEmpty = x => x === null || typeof x === 'undefined'
+const isFunction = fn => typeof fn === 'function'
+const toFunction = fn => {
+  if (fn) return isFunction(fn) ? fn : () => fn
+  return x => x
+}
 
-    throw new Error('cannot open empty box')
-  },
-  {
-    map: (_, filler) => (filler ? tryBox(filler) : EMPTY_BOX)
-  }
-)
+const handle = handler => toFunction(handler)
+const unbox = b => (isBox(b) ? unbox(b()) : b)
+const thenify = (x, async) =>
+  (async || isPromise(x) ? Promise : Sync)[
+    x instanceof Error ? 'reject' : 'resolve'
+  ](x)
 
-const ErrorBox = err => {
-  const errorBox = Object.assign(
-    (...args) => {
-      if (args.length) return unbox(handle(args[0], err))
+const buildInternal = (x, async) => {
+  return Object.assign(
+    handler => {
+      const lastThen = thenify(unbox(x), async || isPromise(x))
+        .then(val => (isEmpty(val) ? handle(handler)(val) : val))
+        .then(
+          val =>
+            isEmpty(val) ? raise(new Error('cannot open empty box')) : val,
+          handler ? err => unbox(handle(handler)(err)) : null
+        )
 
-      throw err
+      return isPromise(lastThen) ? lastThen : lastThen.unthen()
     },
     {
-      map: (_, handler) =>
-        handler ? tryBox(() => handle(handler, err)) : errorBox
+      _async: async,
+      map: (fn, handler) =>
+        buildInternal(
+          thenify(unbox(x), async).then(
+            val =>
+              isEmpty(val) ? handle(handler)(val) : fn ? unbox(fn(val)) : val,
+            handler ? err => unbox(handle(handler)(err)) : null
+          ),
+          async
+        )
     }
   )
+}
 
-  return errorBox
+const Box = x => buildInternal(x, isPromise(x))
+Box.all = boxes => {
+  const anyAsync = boxes.some(b => isPromise(b) || (isBox(b) && b._async))
+  if (anyAsync) return buildInternal(Promise.all(boxes.map(b => Box(b)())))
+
+  try {
+    return buildInternal(boxes.map(b => buildInternal(b, false)()), false)
+  } catch (err) {
+    return buildInternal(err, false)
+  }
 }
 
 module.exports = Box

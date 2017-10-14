@@ -2,124 +2,193 @@
 
 A tiny tool for synchronous and asynchronous functional programming.
 
-**Note:** None of the ideas used to make this tool are my own, I'm just trying to combine them in a way that has the smallest possible API. It's Maybe monads + some other niceties.
+## Why?
+Because doing async properly, handling errors, and dealing with null is hard but doesn't need to be.
 
-## Idea
+By adopting some powerful ideas from old school CompSci and wrapping it with a trivial API, you get to deal with that complexity like a grown up.
 
-The basic unit of boxie is an immutable Box.
+## What
+Boxie provides synchronous and asynchronous wrappers around immutable values so that you can work with them without losing your mind, even when they're not behaving.
 
-Boxes can be Full Boxes, Empty Boxes, or Error Boxes. Once they are created they can never change.
-
-```js
-const fullBox = Box('hello')
-const emptyBox = Box() // or Box(null)
-const errorBox = Box.error(new Error('Huh?'))
-```
-
-To access the value in the box, you invoke it like so:
-```js
-helloBox() // returns 'hello'
-emptyBox() // throws Error('cannot open empty box')
-errorBox() // throws Error('Huh?')
-```
-
-Notice that empty boxes and error boxes don't bahave too well. We can pass a filler function, or a value when invoking the box to fix this:
+As an example take this brittle piece of code:
 
 ```js
-emptyBox('roomy') // 'roomy'
-errorBox(err => `ignoring: ${err.message}`) // 'ignoring: Huh?'
-```
-Boxes can be asked to create new boxes by invoking their one and only method (`map`):
+const readFile = require('util').promisify(require('fs').readFile)
 
-```js
-const box2 = Box(1).map(n => n * 2) // A box containing 2
-```
-
-Since `map` returns a box, it can be invoked in a chain like so:
-```js
-const result = Box(1)
-               .map(n => n * 2)
-               .map(n => n * 3)
-               .map(n => n + 1)
-console.log(result()) // 7
-```
-
-## Hell Breaking Loose
-
-Now, the real power of Boxie is what happens when things go off the rails. Consider the following code that computes a person's full name given a person object:
-
-```js
-Box(person)
-  .map(p => p.first + ' ' + p.last)
-  () // returns the person's full name
-```
-
-If by some blue smoke magic the person is null, the code will throw a **cannot open empty box** error.
-
-If we wanted to handle it differently, by returning null. We could tell it so explicitly, by giving it a value (as below) or by giving it a function that computes a value.
-
-```js
-Box(loadPerson())
-  .map(p => p.first + ' ' + p.last)
-  (null)  // returns null 
-```
-**The important thing** is that the [happy path](https://en.wikipedia.org/wiki/Happy_path) didn't get polluted with null checks or any conditional logic.
-
-### Errors
-Additionally consider the code below. It will fail to extract a province and will throw a **Cannot read property 'province' of undefined** error.
-
-```js
-function extractProvince(account) {
-  return account.contact.address.province
+function loadAuthorPosts(postsPath, authorName) {
+  return Promise.all([
+    lookupAuthorId(authorName) // defined elsewhere,
+    readFile(postsPath, 'utf-8').then(JSON.parse)
+  ])
+  .then(([authorId, posts]) => posts.filter(p => p.authorId === authorId))
+  .catch(err => [])
 }
 
-console.log(extractProvince({contact: {name: 'Allain'}}))
+loadAuthorPosts('all-posts.json', 'Allain')
+  .then(console.log)
 ```
 
-This can be resolved by using a Box like so:
+It will fail for at least these reasons:
+
+1. The file does not exist or is not readable
+1. The file contains malformed JSON
+1. lookupAuthorId returns null
+
+The fact that it's written using promises helps a bit; it will swallow the first few errors and return an array.
+
+The 3rd failure is more subtle since it's not a hard failure. No exception or rejection occurs, and conceivably if some posts are anonymous they might have null authorIds and be incorreectly attributed to Allain.
+
+Using Box to write the same piece of code:
 
 ```js
-function extractProvince(account) {
-  return Box(account)
-    .map(a => a.contact.address.province)
-    (err => null) // or (null)
+const Box = require('boxie')
+const readFile = require('util').promisify(require('fs').readFile)
+
+function loadAuthorPosts(postsPath, authorName) {
+  return Box.all([
+    lookupAuthorId(authorName),
+    AsyncBox(readFile(postsPath, 'utf-8')).map(JSON.parse)
+  ]).map(([posts, authorId]) => 
+    posts => posts.filter(p => p.authorId === authorId)
+  )(err => {
+    console.error(err) // err is empty if box 
+    return []
+  })
 }
-console.log(extractProvince({contact: {name: 'Allain'}})) // null
+
+loadAuthorPosts('all-posts.json', 'Allain')
+  .then(console.log)
+```
+If you're hunting for the difference, it's subtle: instead of a catch call, it invokes the Box with a handler function. If something went wrong (an empty box, or an error while processing), the handler will be called with the content of the box (an Error, null, or undefined).
+
+## Asynchronous Usage
+Box can be used asynchronously by placing Promises in them. When the box is opened (by invoking it), it returns a promise.
+
+```js
+const result = Box(Promise.resolve(1)).map(x => x * 2).map(x => x * 3)()
+
+// result is a promise so use it like one
+result.then(console.log, console.error) // logs 6 to stdout
 ```
 
-### Empty and Error box handling while mapping
+## Synchronous Usage
+Box intelligently recognizes when it's doing things synchrnously. If a box does not contain a Promise or is not derived from a box that does, it's a synchronous box.
 
-As a convenience, the `map` method accepts a second parameter. Empty and Error boxes will be use to fill a new box instead of operating on the current one.
+When synchronous boxes are unboxed, they return their contents, instead of Promise.
 
 For example:
-
 ```js
-// Error handling
-Box.error(new Error('hello'))
-  .map(null, err => err.message) // a handler
-  .map(x => x + ' world')
-  () // 'hello world'
+const result = Box(1).map(x => x * 2).map(x => x * 3)()
 
-// Empty handling
-Box()
-  .map(null, 'hello') // a value
-  .map(x => x + ' world')
-  () // hello world
+// because no step of the computation involved Promises, when the box is opened (by invoking it), it returns 6
+console.log(result)
+```
+## API
+
+### `Box(value)`
+Box is a factory function which returns box instances wrapping the value they are passed.
+
+Examples:
+```js
+// synchrnous box containing 1 
+Box(1) 
+
+// Async box containing 1
+Box(Promise.resolve(1)) 
+
+// Synchronous empty box
+Box(null)
+
+// Synchronous error box
+Box(new Error('huh?'))
+
+// Async error box:
+Box(Promise.reject(new Error('error')))
 ```
 
-## AsyncBox
-An AsyncBox is just like a normal Box, except that when opened it returns a Promise.
-
-It can be used exactly like a normal Box, and follows the same rules:
+### `Box.map(fn, handler)`
+If the box is not empty and is not an error box, `Box.map` applies the function `fn` to its content and then wraps it in a new box.
 
 ```js
-let result = AsyncBox(fetch('https://jsonplaceholder.typicode.com/posts'))
-  .map(r => r.json())
-  .map(posts => posts.filter(p => p.id % 2))
-  .map(posts => posts.map(p => p.title))
-  (err => []) // generate promise that even on failure returns an array
+// synchronous Box containing 3
+Box(1).map(n => n + 2)
 
-result.then(console.log) // list of titles of odd posts
+// Async box containing 3 
+Box(1).map(n => Promise.resolve(n + 2)) 
+Box(Promise.resolve(1)).map(n => n + 2) 
+
+// A box containing an error
+Box(1).map(n => { throw new Error('test') })
+
+// An empty box
+Box(1).map(n => null)
 ```
 
-It can accept promises or simple values when building boxes.
+When the box is an error box `fn` is not called, and handler can be used to fix the error:
+
+```js
+// intercepts the error and returns a new box containing 100
+Box(new Error('error'))
+  .map(x => alert('?'))  // not called
+  .map(null, err => 100) // fixes the error
+```
+
+Similarly if the box is empty, handler performs the same role, it creates a new box with the handler function or value:
+```js
+Box().map(null, x => 100) // a new box with 100 in it
+Box().map(null, 200)      // a new box with 200 in it
+```
+
+### `box()` - Unboxing
+A box can be unboxed by invoking it like so:
+
+```js
+Box(100)() // 100
+Box(Promise.resolve(100))() // Promise resolving to 100
+```
+
+In the case of empty boxes if a handler is passed it will be used to fill the box:
+
+```js
+// Empty boxes
+Box()()          // throws Error('cannot open empty box')
+Box()(() => 100) // 100
+Box()(100)       // 100 
+Box(Promise.resolve())(() => 100) // Promise resolving to 100
+Box(Promise.resolve(null))(100)   // Promise resolving to 100
+```
+
+When the box is an error box the handler can be used to fix the error:
+```js
+// Error Boxes
+Box(new Error('error'))()    // throws Error('error') 
+
+Box(new Error('error'))(100)       // 100
+Box(new Error('error'))(() => 100) // 100
+
+const asyncErr = Box(Promise.reject('huh'))
+acyncErr()       // rejecting promise
+asyncErr(100)    // resolves to 100
+asyncErr((err) => `${err}!`)  // resolves to huh!
+```
+
+### `Box.all([...])`
+Creates a box that contains the results of all of the boxes it's passed:
+
+```js
+// Synchronous Usage
+Box.all([
+  Box(1), Box(2)
+])() // returns [1, 2]
+
+// Asynchronous Usage
+Box.all([
+  Box(Promise.resolve(1)), 
+  Box(Promise.resolve(2))
+])() // Promise resolving to [1, 2]
+
+// Mixed Usage. It knows that it must be asynchronous
+Box.all([
+  Box(Promise.resolve(1)), 
+  Box(2)
+])() // Promise resolving to [1, 2]
