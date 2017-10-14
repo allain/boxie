@@ -1,8 +1,4 @@
-/**
- * This module gives us a synchronous version of a 
- */
-
-// helper to turn try catch into a function
+// helper to turn try catch into an expression
 const attempt = (action, fix) => {
   try {
     return action()

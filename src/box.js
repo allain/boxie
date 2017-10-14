@@ -1,7 +1,7 @@
 const Sync = require('./sync-then.js')
 
 const raise = err => {
-  throw err
+  throw new Error(err)
 }
 
 const isPromise = x => x && isFunction(x.then) && isFunction(x.catch)
@@ -20,14 +20,13 @@ const thenify = (x, async) =>
     x instanceof Error ? 'reject' : 'resolve'
   ](x)
 
-const buildInternal = (x, async) => {
-  return Object.assign(
+const buildInternal = (x, async) =>
+  Object.assign(
     handler => {
       const lastThen = thenify(unbox(x), async || isPromise(x))
         .then(val => (isEmpty(val) ? handle(handler)(val) : val))
         .then(
-          val =>
-            isEmpty(val) ? raise(new Error('cannot open empty box')) : val,
+          val => (isEmpty(val) ? raise('cannot open empty box') : val),
           handler ? err => unbox(handle(handler)(err)) : null
         )
 
@@ -46,7 +45,6 @@ const buildInternal = (x, async) => {
         )
     }
   )
-}
 
 const Box = x => buildInternal(x, isPromise(x))
 Box.all = boxes => {
