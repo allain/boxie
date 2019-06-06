@@ -24,6 +24,6 @@
   },
   "homepage": "https://github.com/allain/boxie#readme",
   "devDependencies": {
-    "jest": "^23.1.0"
+    "jest": "^24.8.0"
   }
 }
