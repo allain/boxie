@@ -47,7 +47,7 @@ const readFile = require('util').promisify(require('fs').readFile)
 function loadAuthorPosts(postsPath, authorName) {
   return Box.all([
     lookupAuthorId(authorName),
-    AsyncBox(readFile(postsPath, 'utf-8')).map(JSON.parse)
+    Box(readFile(postsPath, 'utf-8')).map(JSON.parse)
   ]).map(([posts, authorId]) => 
     posts => posts.filter(p => p.authorId === authorId)
   )(err => {
